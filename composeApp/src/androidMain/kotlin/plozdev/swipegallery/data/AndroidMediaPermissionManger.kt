@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import plozdev.swipegallery.PermissionDelegate
+import plozdev.swipegallery.data.PermissionDelegate
 import plozdev.swipegallery.data.media.MediaPermissionManagerI
 
 class AndroidMediaPermissionManger(private val context : Context) : MediaPermissionManagerI {

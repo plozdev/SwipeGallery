@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import plozdev.swipegallery.data.PermissionDelegate
 
 class MainActivity : ComponentActivity() {
 

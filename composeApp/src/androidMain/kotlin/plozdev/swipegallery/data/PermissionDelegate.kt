@@ -1,4 +1,4 @@
-package plozdev.swipegallery
+package plozdev.swipegallery.data
 
 import androidx.activity.result.ActivityResultLauncher
 import kotlinx.coroutines.CancellableContinuation
@@ -20,16 +20,17 @@ object PermissionDelegate {
     }
 
     // Hàm suspend nhận lệnh yêu cầu quyền và treo coroutine cho tới khi có kết quả
-    suspend fun requestPermissions(permissions: Array<String>): Boolean = suspendCancellableCoroutine { cont ->
-        val l = launcher
-        if (l != null) {
-            continuation = cont
-            l.launch(permissions)
-        } else {
-            // Trả về false ngay lập tức nếu launcher chưa được đăng ký
-            cont.resume(false)
+    suspend fun requestPermissions(permissions: Array<String>): Boolean =
+        suspendCancellableCoroutine { cont ->
+            val l = launcher
+            if (l != null) {
+                continuation = cont
+                l.launch(permissions)
+            } else {
+                // Trả về false ngay lập tức nếu launcher chưa được đăng ký
+                cont.resume(false)
+            }
         }
-    }
 
     // Callback nhận kết quả từ Activity và giải phóng coroutine đang treo
     fun onPermissionResult(results: Map<String, Boolean>) {
