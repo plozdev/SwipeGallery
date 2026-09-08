@@ -23,6 +23,12 @@ class IosMediaPermissionManager : MediaPermissionManagerI {
                 cont.resume(isGranted)
             }
         }
+    }
 
+    override fun openAppSettings() {
+        val url = platform.Foundation.NSURL.URLWithString(platform.UIKit.UIApplicationOpenSettingsURLString)
+        if (url != null && platform.UIKit.UIApplication.sharedApplication.canOpenURL(url)) {
+            platform.UIKit.UIApplication.sharedApplication.openURL(url)
+        }
     }
 }
