@@ -54,17 +54,13 @@ class DiscoverViewModel (
                     triagedCount = triaged,
                     keptRatio = ratio,
                     safeStagingEnabled = safeStaging,
-                    hapticsEnabled = haptics,
-                    autoAdvanceEnabled = autoAdvance,
-                    burstGroupingEnabled = burstGrouping
+                    hapticsEnabled = haptics
                 )
                 _uiState.update {
                     it.copy(
                         isPendingPersisted = safeStaging,
                         safeStagingEnabled = safeStaging,
-                        hapticsEnabled = haptics,
-                        autoAdvanceEnabled = autoAdvance,
-                        burstGroupingEnabled = burstGrouping
+                        hapticsEnabled = haptics
                     )
                 }
             } catch (e: Exception) {
@@ -444,28 +440,8 @@ class DiscoverViewModel (
         // Videos: Filter actual videos
         val videos = photos.filter { it.isVideo }
         
-        // Duplicates: Group photos taken within 10 seconds with similar dimensions or identical sizes if burst enabled
-        val isBurstGroupingEnabled = uiState.value.burstGroupingEnabled
-        val duplicates = mutableListOf<PhotoItem>()
-        if (isBurstGroupingEnabled) {
-            val sorted = photos.sortedBy { it.dateAdded }
-            var i = 0
-            while (i < sorted.size - 1) {
-                val current = sorted[i]
-                val next = sorted[i + 1]
-                val timeDiffSec = kotlin.math.abs(current.dateAdded - next.dateAdded)
-                val isBurst = timeDiffSec < 10 && current.width == next.width && current.height == next.height
-                val isSameSize = current.fileSize > 0 && current.fileSize == next.fileSize
-                
-                if (isBurst || isSameSize) {
-                    duplicates.add(current)
-                    duplicates.add(next)
-                    i += 2
-                } else {
-                    i++
-                }
-            }
-        }
+        // Duplicates: Tạm thời vô hiệu hóa theo yêu cầu để xem xét lại thuật toán nhận diện ảnh giống nhau sau
+        val duplicates = emptyList<PhotoItem>()
         
         _uiState.update { currentState ->
             currentState.copy(
@@ -578,23 +554,6 @@ class DiscoverViewModel (
             repo.setHapticsEnabled(enabled)
             _settingsState.update { it.copy(hapticsEnabled = enabled) }
             _uiState.update { it.copy(hapticsEnabled = enabled) }
-        }
-    }
-
-    fun setAutoAdvanceEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            repo.setAutoAdvanceEnabled(enabled)
-            _settingsState.update { it.copy(autoAdvanceEnabled = enabled) }
-            _uiState.update { it.copy(autoAdvanceEnabled = enabled) }
-        }
-    }
-
-    fun setBurstGroupingEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            repo.setBurstGroupingEnabled(enabled)
-            _settingsState.update { it.copy(burstGroupingEnabled = enabled) }
-            _uiState.update { it.copy(burstGroupingEnabled = enabled) }
-            applyFilters()
         }
     }
 

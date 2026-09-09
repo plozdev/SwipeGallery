@@ -33,9 +33,7 @@ data class SettingsUiState(
     val triagedCount: Int = 0,
     val keptRatio: Int = 0,
     val safeStagingEnabled: Boolean = true,
-    val hapticsEnabled: Boolean = true,
-    val autoAdvanceEnabled: Boolean = true,
-    val burstGroupingEnabled: Boolean = true
+    val hapticsEnabled: Boolean = true
 )
 
 /**
@@ -46,8 +44,6 @@ fun SettingsScreen(
     uiState: SettingsUiState,
     onSafeStagingToggled: (Boolean) -> Unit,
     onHapticsToggled: (Boolean) -> Unit,
-    onAutoAdvanceToggled: (Boolean) -> Unit,
-    onBurstGroupingToggled: (Boolean) -> Unit,
     onClearHistoryClick: () -> Unit,
     onClearCacheClick: () -> Unit,
     onExportReportClick: () -> Unit = {},
@@ -101,20 +97,6 @@ fun SettingsScreen(
                     subtitle = "Rung nhẹ khi ngón tay vượt qua ngưỡng vuốt thẻ",
                     checked = uiState.hapticsEnabled,
                     onCheckedChange = onHapticsToggled
-                )
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingSwitchRow(
-                    title = "Tự động chuyển thẻ",
-                    subtitle = "Tự động chuyển sang ảnh tiếp theo sau khi vuốt",
-                    checked = uiState.autoAdvanceEnabled,
-                    onCheckedChange = onAutoAdvanceToggled
-                )
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingSwitchRow(
-                    title = "Gom cụm ảnh chụp liên tiếp",
-                    subtitle = "Tự động nhận diện cụm ảnh chụp liên tiếp nhanh",
-                    checked = uiState.burstGroupingEnabled,
-                    onCheckedChange = onBurstGroupingToggled
                 )
             }
         }
@@ -450,8 +432,6 @@ fun SettingsScreen(
         uiState = settingsState,
         onSafeStagingToggled = { viewModel.setSafeStagingEnabled(it) },
         onHapticsToggled = { viewModel.setHapticsEnabled(it) },
-        onAutoAdvanceToggled = { viewModel.setAutoAdvanceEnabled(it) },
-        onBurstGroupingToggled = { viewModel.setBurstGroupingEnabled(it) },
         onClearHistoryClick = { viewModel.clearSwipeHistory() },
         onClearCacheClick = {
             viewModel.clearCache()
