@@ -1,10 +1,7 @@
 package plozdev.swipegallery.screens
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -278,6 +277,33 @@ fun DiscoverScreen(
         // --- 3. Action Controls: Nút Hoàn Tác, Xóa, Giữ ---
         val undoEnabled = uiState.hasPermission && uiState.canUndo
         val actionEnabled = uiState.hasPermission && topPhoto != null && !topCardState.isSwipingOut
+        val haptic = LocalHapticFeedback.current
+
+        // Animation states cho nút Hoàn Tác
+        val undoIconRotation = remember { Animatable(0f) }
+        val undoButtonScale = remember { Animatable(1f) }
+
+        // Animation chuyển đổi mượt mà giữa trạng thái bật/tắt (enabled/disabled)
+        val animatedUndoAlpha by animateFloatAsState(
+            targetValue = if (undoEnabled) 1f else 0.35f,
+            animationSpec = tween(280, easing = FastOutSlowInEasing)
+        )
+        val animatedUndoScale by animateFloatAsState(
+            targetValue = if (undoEnabled) 1f else 0.85f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+        )
+        val animatedUndoContainer by animateColorAsState(
+            targetValue = if (undoEnabled) colorScheme.surfaceVariant else colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            animationSpec = tween(220)
+        )
+        val animatedUndoContent by animateColorAsState(
+            targetValue = if (undoEnabled) colorScheme.primary else colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+            animationSpec = tween(220)
+        )
+        val animatedUndoBorder by animateColorAsState(
+            targetValue = if (undoEnabled) colorScheme.primary.copy(alpha = 0.5f) else colorScheme.outlineVariant.copy(alpha = 0.25f),
+            animationSpec = tween(220)
+        )
 
         Row(
             modifier = Modifier
@@ -286,21 +312,49 @@ fun DiscoverScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Nút Hoàn Tác (Undo)
+            // Nút Hoàn Tác (Undo) với hiệu ứng nhún nảy đàn hồi và xoay icon
             FloatingActionButton(
-                onClick = { if (undoEnabled) onUndo() },
-                containerColor = if (undoEnabled) colorScheme.surfaceVariant else colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                contentColor = if (undoEnabled) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                onClick = {
+                    if (undoEnabled) {
+                        scope.launch {
+                            if (uiState.hapticsEnabled) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            // Nhún nút xuống và nảy lại
+                            launch {
+                                undoButtonScale.animateTo(0.78f, animationSpec = tween(70, easing = LinearEasing))
+                                undoButtonScale.animateTo(1f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMedium))
+                            }
+                            // Xoay icon 360 độ ngược chiều kim đồng hồ
+                            launch {
+                                undoIconRotation.snapTo(0f)
+                                undoIconRotation.animateTo(-360f, animationSpec = tween(420, easing = FastOutSlowInEasing))
+                            }
+                            onUndo()
+                        }
+                    }
+                },
+                containerColor = animatedUndoContainer,
+                contentColor = animatedUndoContent,
                 shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = if (undoEnabled) 4.dp else 0.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = if (undoEnabled) 6.dp else 0.dp),
                 modifier = Modifier
                     .size(54.dp)
-                    .border(1.dp, colorScheme.outlineVariant.copy(alpha = if (undoEnabled) 1f else 0.25f), CircleShape)
+                    .graphicsLayer {
+                        scaleX = animatedUndoScale * undoButtonScale.value
+                        scaleY = animatedUndoScale * undoButtonScale.value
+                        alpha = animatedUndoAlpha
+                    }
+                    .border(1.5.dp, animatedUndoBorder, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Hoàn tác",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            rotationZ = undoIconRotation.value
+                        }
                 )
             }
 
@@ -708,19 +762,31 @@ private fun AllPhotosReviewedView(
                 textAlign = TextAlign.Center
             )
 
-            if (canUndo) {
-                Spacer(modifier = Modifier.height(24.dp))
+            AnimatedVisibility(
+                visible = canUndo,
+                enter = fadeIn() + scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                exit = fadeOut() + scaleOut()
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = onReset,
-                    colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary),
-                    shape = RoundedCornerShape(percent = 50)
-                ) {
-                    Text(
-                        text = "Hoàn tác ảnh vừa vuốt",
-                        color = colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = onReset,
+                        colors = ButtonDefaults.buttonColors(containerColor = colorScheme.primary),
+                        shape = RoundedCornerShape(percent = 50)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Hoàn tác ảnh vừa vuốt",
+                            color = colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
