@@ -9,8 +9,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import plozdev.swipegallery.data.media.MediaPermissionManagerI
 import plozdev.swipegallery.data.repository.PhotoRepo
-import plozdev.swipegallery.domain.models.PhotoItem
 import plozdev.swipegallery.domain.models.Album
+import plozdev.swipegallery.domain.models.PhotoItem
+import plozdev.swipegallery.screens.SettingsUiState
 
 data class SwipedHistoryItem(
     val photo: PhotoItem,
@@ -24,7 +25,76 @@ class DiscoverViewModel (
     private val _uiState = MutableStateFlow(DiscoverState())
     val uiState: StateFlow<DiscoverState> = _uiState.asStateFlow()
 
+    private val _settingsState = MutableStateFlow(SettingsUiState())
+    val settingsState: StateFlow<SettingsUiState> = _settingsState.asStateFlow()
+
     private var allUnprocessedPhotos = emptyList<PhotoItem>()
+
+    init {
+        loadSettings()
+    }
+
+    fun loadSettings() {
+        viewModelScope.launch {
+            try {
+                val streak = repo.getStreakDays()
+                val cleanedBytes = repo.getTotalCleanedBytes()
+                val triaged = repo.getTriagedCount()
+                val kept = repo.getKeptCount()
+                val safeStaging = repo.isSafeStagingEnabled()
+                val haptics = repo.isHapticsEnabled()
+                val autoAdvance = repo.isAutoAdvanceEnabled()
+                val burstGrouping = repo.isBurstGroupingEnabled()
+
+                val ratio = if (triaged > 0) ((kept * 100) / triaged).coerceIn(0, 100) else 0
+
+                _settingsState.value = SettingsUiState(
+                    streakDays = streak,
+                    totalCleanedBytes = cleanedBytes,
+                    triagedCount = triaged,
+                    keptRatio = ratio,
+                    safeStagingEnabled = safeStaging,
+                    hapticsEnabled = haptics,
+                    autoAdvanceEnabled = autoAdvance,
+                    burstGroupingEnabled = burstGrouping
+                )
+                _uiState.update {
+                    it.copy(
+                        isPendingPersisted = safeStaging,
+                        safeStagingEnabled = safeStaging,
+                        hapticsEnabled = haptics,
+                        autoAdvanceEnabled = autoAdvance,
+                        burstGroupingEnabled = burstGrouping
+                    )
+                }
+            } catch (e: Exception) {
+                // Keep default state on error
+            }
+        }
+    }
+
+    fun refreshSettingsStats() {
+        viewModelScope.launch {
+            try {
+                val streak = repo.getStreakDays()
+                val cleanedBytes = repo.getTotalCleanedBytes()
+                val triaged = repo.getTriagedCount()
+                val kept = repo.getKeptCount()
+                val ratio = if (triaged > 0) ((kept * 100) / triaged).coerceIn(0, 100) else 0
+
+                _settingsState.update { current ->
+                    current.copy(
+                        streakDays = streak,
+                        totalCleanedBytes = cleanedBytes,
+                        triagedCount = triaged,
+                        keptRatio = ratio
+                    )
+                }
+            } catch (e: Exception) {
+                // Ignore stats update error
+            }
+        }
+    }
 
     fun checkAndLoadMedia() {
         viewModelScope.launch {
@@ -53,6 +123,7 @@ class DiscoverViewModel (
                         )
                     }
                     applyFilters()
+                    refreshSettingsStats()
                 } catch (e: Exception) {
                     _uiState.update {
                         it.copy(
@@ -112,21 +183,33 @@ class DiscoverViewModel (
             viewModelScope.launch {
                 try {
                     repo.markAsKept(photo.id)
+                    repo.recordStreakActivity()
+                    refreshSettingsStats()
                 } catch (e: Exception) {
                     // Log hoặc handle lỗi nếu có
                 }
             }
         } else {
-            // QUẸT TRÁI (Xóa): Thêm đối tượng PhotoItem vào hàng đợi pendingDeletions
+            // QUẸT TRÁI (Xóa)
             viewModelScope.launch {
                 try {
-                    repo.markAsPendingDeletion(photo.id)
+                    repo.recordStreakActivity()
+                    val safeStaging = repo.isSafeStagingEnabled()
+                    if (safeStaging) {
+                        repo.markAsPendingDeletion(photo.id)
+                        _uiState.update { currentState ->
+                            val currentPending = currentState.pendingDeletions
+                            val newPending = if (currentPending.any { it.id == photo.id }) currentPending else currentPending + photo
+                            currentState.copy(pendingDeletions = newPending)
+                        }
+                    } else {
+                        val success = repo.deletePhotos(listOf(photo.id))
+                        if (success) {
+                            repo.addCleanedBytes(photo.fileSize)
+                        }
+                    }
+                    refreshSettingsStats()
                 } catch (e: Exception) {}
-            }
-            _uiState.update { currentState ->
-                val currentPending = currentState.pendingDeletions
-                val newPending = if (currentPending.any { it.id == photo.id }) currentPending else currentPending + photo
-                currentState.copy(pendingDeletions = newPending)
             }
         }
         applyFilters()
@@ -144,6 +227,7 @@ class DiscoverViewModel (
                 }
             }
             allUnprocessedPhotos = listOf(last.photo) + allUnprocessedPhotos
+            refreshSettingsStats()
             applyFilters()
         }
     }
@@ -188,8 +272,12 @@ class DiscoverViewModel (
             if (selectedIds.isNotEmpty()) {
                 _uiState.update { it.copy(isLoading = true, errorMsg = null) }
                 try {
+                    val deletedPhotos = uiState.value.pendingDeletions.filter { it.id in selectedIds }
+                    val deletedBytes = deletedPhotos.sumOf { it.fileSize }
                     val success = repo.deletePhotos(selectedIds)
                     if (success) {
+                        repo.addCleanedBytes(deletedBytes)
+                        repo.recordStreakActivity()
                         // Lọc ra các ảnh không được chọn để xóa (người dùng muốn giữ lại)
                         val keptPhotos = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
                         repo.clearAllPendingDeletions()
@@ -205,6 +293,7 @@ class DiscoverViewModel (
                             )
                         }
                         allUnprocessedPhotos = keptPhotos + allUnprocessedPhotos
+                        refreshSettingsStats()
                         applyFilters()
                     } else {
                         _uiState.update {
@@ -244,12 +333,15 @@ class DiscoverViewModel (
         val idsToDelete = uiState.value.pendingDeletions.map { it.id }
         if (idsToDelete.isEmpty()) return
 
+        val deletedBytes = uiState.value.pendingDeletions.sumOf { it.fileSize }
         _uiState.update { it.copy(isLoading = true, errorMsg = null) }
         viewModelScope.launch {
             try {
                 val success = repo.deletePhotos(idsToDelete)
 
                 if (success) {
+                    repo.addCleanedBytes(deletedBytes)
+                    repo.recordStreakActivity()
                     repo.clearAllPendingDeletions()
                     _uiState.update {
                         it.copy(
@@ -257,6 +349,7 @@ class DiscoverViewModel (
                             pendingDeletions = emptyList()
                         )
                     }
+                    refreshSettingsStats()
                 } else {
                     _uiState.update {
                         it.copy(
@@ -346,29 +439,31 @@ class DiscoverViewModel (
     // Helper to update photos stack and recalculate cleanup categories
     private fun updatePhotosAndCategories(photos: List<PhotoItem>) {
         // Blurry photos: True blur detection requires heavy computer vision/bitmap analysis.
-        // We simulate it using a hash, but exclude low-size photos or high-res photos to make it realistic.
         val blurry = photos.filter { !it.isVideo && it.id.hashCode() % 8 == 0 }
         
         // Videos: Filter actual videos
         val videos = photos.filter { it.isVideo }
         
-        // Duplicates: Group photos taken within 10 seconds with similar dimensions or identical sizes
-        val sorted = photos.sortedBy { it.dateAdded }
+        // Duplicates: Group photos taken within 10 seconds with similar dimensions or identical sizes if burst enabled
+        val isBurstGroupingEnabled = uiState.value.burstGroupingEnabled
         val duplicates = mutableListOf<PhotoItem>()
-        var i = 0
-        while (i < sorted.size - 1) {
-            val current = sorted[i]
-            val next = sorted[i + 1]
-            val timeDiffSec = kotlin.math.abs(current.dateAdded - next.dateAdded)
-            val isBurst = timeDiffSec < 10 && current.width == next.width && current.height == next.height
-            val isSameSize = current.fileSize > 0 && current.fileSize == next.fileSize
-            
-            if (isBurst || isSameSize) {
-                duplicates.add(current)
-                duplicates.add(next)
-                i += 2
-            } else {
-                i++
+        if (isBurstGroupingEnabled) {
+            val sorted = photos.sortedBy { it.dateAdded }
+            var i = 0
+            while (i < sorted.size - 1) {
+                val current = sorted[i]
+                val next = sorted[i + 1]
+                val timeDiffSec = kotlin.math.abs(current.dateAdded - next.dateAdded)
+                val isBurst = timeDiffSec < 10 && current.width == next.width && current.height == next.height
+                val isSameSize = current.fileSize > 0 && current.fileSize == next.fileSize
+                
+                if (isBurst || isSameSize) {
+                    duplicates.add(current)
+                    duplicates.add(next)
+                    i += 2
+                } else {
+                    i++
+                }
             }
         }
         
@@ -431,8 +526,12 @@ class DiscoverViewModel (
         _uiState.update { it.copy(isLoading = true, errorMsg = null) }
         viewModelScope.launch {
             try {
+                val deletedPhotos = uiState.value.photos.filter { it.id in selectedIds }
+                val deletedBytes = deletedPhotos.sumOf { it.fileSize }
                 val success = repo.deletePhotos(selectedIds)
                 if (success) {
+                    repo.addCleanedBytes(deletedBytes)
+                    repo.recordStreakActivity()
                     val updatedPhotos = uiState.value.photos.filter { it.id !in selectedIds }
                     _uiState.update { currentState ->
                         currentState.copy(
@@ -441,6 +540,7 @@ class DiscoverViewModel (
                             cleanupSelectedIds = emptySet()
                         )
                     }
+                    refreshSettingsStats()
                     updatePhotosAndCategories(updatedPhotos)
                 } else {
                     _uiState.update {
@@ -465,10 +565,46 @@ class DiscoverViewModel (
         _uiState.update { it.copy(errorMsg = null) }
     }
 
-    fun togglePendingPersistence(enabled: Boolean) {
+    fun setSafeStagingEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            repo.setPendingDeletionsPersisted(enabled)
-            _uiState.update { it.copy(isPendingPersisted = enabled) }
+            repo.setSafeStagingEnabled(enabled)
+            _settingsState.update { it.copy(safeStagingEnabled = enabled) }
+            _uiState.update { it.copy(safeStagingEnabled = enabled, isPendingPersisted = enabled) }
+        }
+    }
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.setHapticsEnabled(enabled)
+            _settingsState.update { it.copy(hapticsEnabled = enabled) }
+            _uiState.update { it.copy(hapticsEnabled = enabled) }
+        }
+    }
+
+    fun setAutoAdvanceEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.setAutoAdvanceEnabled(enabled)
+            _settingsState.update { it.copy(autoAdvanceEnabled = enabled) }
+            _uiState.update { it.copy(autoAdvanceEnabled = enabled) }
+        }
+    }
+
+    fun setBurstGroupingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repo.setBurstGroupingEnabled(enabled)
+            _settingsState.update { it.copy(burstGroupingEnabled = enabled) }
+            _uiState.update { it.copy(burstGroupingEnabled = enabled) }
+            applyFilters()
+        }
+    }
+
+    fun togglePendingPersistence(enabled: Boolean) {
+        setSafeStagingEnabled(enabled)
+    }
+
+    fun clearCache() {
+        viewModelScope.launch {
+            repo.clearCache()
         }
     }
 
@@ -478,6 +614,7 @@ class DiscoverViewModel (
             try {
                 repo.clearHistory()
                 checkAndLoadMedia()
+                loadSettings()
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMsg = "Lỗi khi đặt lại lịch sử: ${e.message}") }
             }

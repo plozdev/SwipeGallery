@@ -34,6 +34,10 @@ data class DiscoverState(
     val mediaTypeFilter: MediaTypeFilter = MediaTypeFilter.ALL,
     val timeFilter: TimeFilter = TimeFilter.ALL,
     val isPendingPersisted: Boolean = true,
+    val safeStagingEnabled: Boolean = true,
+    val hapticsEnabled: Boolean = true,
+    val autoAdvanceEnabled: Boolean = true,
+    val burstGroupingEnabled: Boolean = true,
     
     // Cleanup state
     val duplicatePhotos: List<PhotoItem> = emptyList(),

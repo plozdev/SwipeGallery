@@ -58,7 +58,8 @@ data class DiscoverUiState(
     val canUndo: Boolean = false,
     val isLoading: Boolean = false,
     val hasPermission: Boolean = true,
-    val hasSwipedInSession: Boolean = false
+    val hasSwipedInSession: Boolean = false,
+    val hapticsEnabled: Boolean = true
 )
 
 /**
@@ -249,6 +250,7 @@ fun DiscoverScreen(
                                         photo = photo,
                                         state = topCardState,
                                         enabled = !topCardState.isSwipingOut,
+                                        hapticsEnabled = uiState.hapticsEnabled,
                                         onSwiped = { direction ->
                                             if (direction == SwipeDirection.RIGHT) {
                                                 onSwipeRight(photo)
@@ -771,7 +773,8 @@ fun DiscoverScreen(
         canUndo = viewModel.hasSwipedInSession(),
         isLoading = uiState.isLoading,
         hasPermission = uiState.hasPermission,
-        hasSwipedInSession = viewModel.hasSwipedInSession()
+        hasSwipedInSession = viewModel.hasSwipedInSession(),
+        hapticsEnabled = uiState.hapticsEnabled
     )
 
     DiscoverScreen(

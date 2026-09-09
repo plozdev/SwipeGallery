@@ -20,3 +20,12 @@ actual fun formatEpochSeconds(seconds: Long): String {
 actual fun getCurrentEpochSeconds(): Long {
     return NSDate().timeIntervalSince1970.toLong()
 }
+
+actual fun getEpochDay(): Long {
+    val now = NSDate()
+    val seconds = now.timeIntervalSince1970
+    val tz = NSTimeZone.localTimeZone
+    val offset = tz.secondsFromGMTForDate(now)
+    val localSeconds = seconds + offset
+    return (localSeconds / 86400.0).toLong()
+}

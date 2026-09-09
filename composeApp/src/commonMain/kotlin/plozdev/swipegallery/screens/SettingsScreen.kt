@@ -28,10 +28,10 @@ import plozdev.swipegallery.screens.viewModels.DiscoverViewModel
  * Immutable UI State cho màn hình Cài đặt.
  */
 data class SettingsUiState(
-    val streakDays: Int = 7,
-    val totalCleanedBytes: Long = 3_400_000_000L,
-    val triagedCount: Int = 1248,
-    val keptRatio: Int = 94,
+    val streakDays: Int = 0,
+    val totalCleanedBytes: Long = 0L,
+    val triagedCount: Int = 0,
+    val keptRatio: Int = 0,
     val safeStagingEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val autoAdvanceEnabled: Boolean = true,
@@ -50,6 +50,7 @@ fun SettingsScreen(
     onBurstGroupingToggled: (Boolean) -> Unit,
     onClearHistoryClick: () -> Unit,
     onClearCacheClick: () -> Unit,
+    onExportReportClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -141,7 +142,7 @@ fun SettingsScreen(
                     icon = Icons.Default.Share,
                     title = "Xuất báo cáo dọn dẹp",
                     subtitle = "Chia sẻ thống kê dung lượng đã giải phóng",
-                    onClick = { /* Export */ }
+                    onClick = onExportReportClick
                 )
                 HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.5f))
                 SettingActionRow(
@@ -416,7 +417,7 @@ private fun InfoSpecRow(label: String, value: String) {
 }
 
 private fun formatSettingsFileSize(bytes: Long): String {
-    if (bytes <= 0) return ""
+    if (bytes <= 0) return "0 B"
     val kb = bytes / 1024.0
     val mb = kb / 1024.0
     val gb = mb / 1024.0
@@ -437,30 +438,67 @@ fun SettingsScreen(
     viewModel: DiscoverViewModel,
     modifier: Modifier = Modifier
 ) {
-    var safeStaging by remember { mutableStateOf(true) }
-    var haptics by remember { mutableStateOf(true) }
-    var autoAdvance by remember { mutableStateOf(true) }
-    var burstGrouping by remember { mutableStateOf(true) }
+    val settingsState by viewModel.settingsState.collectAsState()
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showCacheClearedDialog by remember { mutableStateOf(false) }
 
-    val presentationState = SettingsUiState(
-        streakDays = 7,
-        totalCleanedBytes = 3_400_000_000L,
-        triagedCount = 1248,
-        keptRatio = 94,
-        safeStagingEnabled = safeStaging,
-        hapticsEnabled = haptics,
-        autoAdvanceEnabled = autoAdvance,
-        burstGroupingEnabled = burstGrouping
-    )
+    LaunchedEffect(Unit) {
+        viewModel.refreshSettingsStats()
+    }
 
     SettingsScreen(
-        uiState = presentationState,
-        onSafeStagingToggled = { safeStaging = it },
-        onHapticsToggled = { haptics = it },
-        onAutoAdvanceToggled = { autoAdvance = it },
-        onBurstGroupingToggled = { burstGrouping = it },
+        uiState = settingsState,
+        onSafeStagingToggled = { viewModel.setSafeStagingEnabled(it) },
+        onHapticsToggled = { viewModel.setHapticsEnabled(it) },
+        onAutoAdvanceToggled = { viewModel.setAutoAdvanceEnabled(it) },
+        onBurstGroupingToggled = { viewModel.setBurstGroupingEnabled(it) },
         onClearHistoryClick = { viewModel.clearSwipeHistory() },
-        onClearCacheClick = { /* Clear local cache */ },
+        onClearCacheClick = {
+            viewModel.clearCache()
+            showCacheClearedDialog = true
+        },
+        onExportReportClick = {
+            showReportDialog = true
+        },
         modifier = modifier
     )
+
+    if (showReportDialog) {
+        val cleanedText = formatSettingsFileSize(settingsState.totalCleanedBytes)
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = {
+                Text(
+                    text = "Báo Cáo Dọn Dẹp",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("🔥 Chuỗi dọn dẹp: ${settingsState.streakDays} ngày liên tiếp")
+                    Text("🗑️ Đã giải phóng: $cleanedText")
+                    Text("📸 Đã phân loại: ${settingsState.triagedCount} ảnh")
+                    Text("⭐ Tỷ lệ giữ lại: ${settingsState.keptRatio}%")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showReportDialog = false }) {
+                    Text("Đóng")
+                }
+            }
+        )
+    }
+
+    if (showCacheClearedDialog) {
+        AlertDialog(
+            onDismissRequest = { showCacheClearedDialog = false },
+            title = { Text("Bộ Nhớ Đệm", fontWeight = FontWeight.Bold) },
+            text = { Text("Đã dọn sạch bộ nhớ cache thumbnail và dữ liệu tạm thời thành công.") },
+            confirmButton = {
+                TextButton(onClick = { showCacheClearedDialog = false }) {
+                    Text("Xong")
+                }
+            }
+        )
+    }
 }

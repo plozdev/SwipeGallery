@@ -46,11 +46,11 @@ class PhotoRepoImpl(
     }
 
     override suspend fun markAsKept(photoId: String) {
-        preferences.markAsProcessed(photoId)
+        preferences.markAsKept(photoId)
     }
 
     override suspend fun unmarkAsKept(photoId: String) {
-        preferences.removeProcessed(photoId)
+        preferences.removeKept(photoId)
     }
 
     override suspend fun clearHistory() {
@@ -64,5 +64,64 @@ class PhotoRepoImpl(
     override suspend fun isPendingDeletionsPersisted(): Boolean {
         return preferences.isPendingDeletionsPersisted()
     }
-}
 
+    override suspend fun getStreakDays(): Int {
+        return preferences.getStreakDays()
+    }
+
+    override suspend fun recordStreakActivity(): Int {
+        return preferences.recordStreakActivity()
+    }
+
+    override suspend fun getTotalCleanedBytes(): Long {
+        return preferences.getTotalCleanedBytes()
+    }
+
+    override suspend fun addCleanedBytes(bytes: Long) {
+        preferences.addCleanedBytes(bytes)
+    }
+
+    override suspend fun getTriagedCount(): Int {
+        return preferences.getProcessedIds().size + preferences.getPendingDeletionIds().size
+    }
+
+    override suspend fun getKeptCount(): Int {
+        return preferences.getKeptIds().size
+    }
+
+    override suspend fun isSafeStagingEnabled(): Boolean {
+        return preferences.isSafeStagingEnabled()
+    }
+
+    override suspend fun setSafeStagingEnabled(enabled: Boolean) {
+        preferences.setSafeStagingEnabled(enabled)
+    }
+
+    override suspend fun isHapticsEnabled(): Boolean {
+        return preferences.isHapticsEnabled()
+    }
+
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
+        preferences.setHapticsEnabled(enabled)
+    }
+
+    override suspend fun isAutoAdvanceEnabled(): Boolean {
+        return preferences.isAutoAdvanceEnabled()
+    }
+
+    override suspend fun setAutoAdvanceEnabled(enabled: Boolean) {
+        preferences.setAutoAdvanceEnabled(enabled)
+    }
+
+    override suspend fun isBurstGroupingEnabled(): Boolean {
+        return preferences.isBurstGroupingEnabled()
+    }
+
+    override suspend fun setBurstGroupingEnabled(enabled: Boolean) {
+        preferences.setBurstGroupingEnabled(enabled)
+    }
+
+    override suspend fun clearCache() {
+        preferences.clearCache()
+    }
+}

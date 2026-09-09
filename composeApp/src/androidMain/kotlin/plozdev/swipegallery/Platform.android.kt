@@ -21,3 +21,10 @@ actual fun formatEpochSeconds(seconds: Long): String {
 actual fun getCurrentEpochSeconds(): Long {
     return System.currentTimeMillis() / 1000
 }
+
+actual fun getEpochDay(): Long {
+    val millis = System.currentTimeMillis()
+    val tz = java.util.TimeZone.getDefault()
+    val localMillis = millis + tz.getOffset(millis)
+    return localMillis / (24L * 60L * 60L * 1000L)
+}

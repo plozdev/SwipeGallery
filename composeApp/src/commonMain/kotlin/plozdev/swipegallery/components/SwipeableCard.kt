@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -149,11 +151,14 @@ fun SwipeableCard(
     enabled: Boolean = true,
     swipeThresholdRatio: Float = 0.40f,
     maxRotationDegrees: Float = 16f,
+    hapticsEnabled: Boolean = true,
     onSwiped: (SwipeDirection) -> Unit = {},
     onClick: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val colorScheme = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    var hasTriggeredHaptic by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -186,13 +191,31 @@ fun SwipeableCard(
                 if (!enabled) return@pointerInput
 
                 detectDragGestures(
+                    onDragStart = {
+                        hasTriggeredHaptic = false
+                    },
                     onDrag = { change, dragAmount ->
                         change.consume()
                         coroutineScope.launch {
                             state.dragBy(dragAmount)
+                            if (hapticsEnabled) {
+                                val threshold = if (state.cardWidthPx > 0f) {
+                                    state.cardWidthPx * swipeThresholdRatio
+                                } else {
+                                    350f
+                                }
+                                val isPastThreshold = kotlin.math.abs(state.offsetX.value) >= threshold
+                                if (isPastThreshold && !hasTriggeredHaptic) {
+                                    hasTriggeredHaptic = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                } else if (!isPastThreshold && hasTriggeredHaptic) {
+                                    hasTriggeredHaptic = false
+                                }
+                            }
                         }
                     },
                     onDragEnd = {
+                        hasTriggeredHaptic = false
                         coroutineScope.launch {
                             val threshold = if (state.cardWidthPx > 0f) {
                                 state.cardWidthPx * swipeThresholdRatio
@@ -218,6 +241,7 @@ fun SwipeableCard(
                         }
                     },
                     onDragCancel = {
+                        hasTriggeredHaptic = false
                         coroutineScope.launch {
                             state.snapBack()
                         }
