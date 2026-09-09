@@ -431,8 +431,14 @@ fun SettingsScreen(
     SettingsScreen(
         uiState = settingsState,
         onSafeStagingToggled = { viewModel.setSafeStagingEnabled(it) },
-        onHapticsToggled = { viewModel.setHapticsEnabled(it) },
+        onHapticsToggled = { enabled ->
+            viewModel.setHapticsEnabled(enabled)
+            if (enabled) {
+                plozdev.swipegallery.triggerHapticFeedback(isThreshold = true)
+            }
+        },
         onClearHistoryClick = { viewModel.clearSwipeHistory() },
+
         onClearCacheClick = {
             viewModel.clearCache()
             showCacheClearedDialog = true

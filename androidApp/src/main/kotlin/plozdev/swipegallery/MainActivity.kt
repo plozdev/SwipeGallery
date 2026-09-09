@@ -29,9 +29,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        AndroidHaptics.init(applicationContext)
         PermissionDelegate.registerLauncher(mediaPermissionLauncher)
         DeleteDelegate.registerLauncher(mediaDeleteLauncher)
         setContent {
+
             val permissionManager = androidx.compose.runtime.remember { 
                 plozdev.swipegallery.data.AndroidMediaPermissionManger(this) 
             }

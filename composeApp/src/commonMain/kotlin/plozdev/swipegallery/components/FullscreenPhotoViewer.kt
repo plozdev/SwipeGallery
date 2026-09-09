@@ -17,16 +17,21 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import plozdev.swipegallery.PlatformBackHandler
 import plozdev.swipegallery.domain.models.PhotoItem
+
 
 @Composable
 fun FullscreenPhotoViewer(
     photo: PhotoItem,
     onClose: () -> Unit
 ) {
+    PlatformBackHandler(enabled = true, onBack = onClose)
+
     var scale by remember { mutableStateOf(1f) }
     var translationX by remember { mutableStateOf(0f) }
     var translationY by remember { mutableStateOf(0f) }
+
 
     Box(
         modifier = Modifier

@@ -29,3 +29,15 @@ actual fun getEpochDay(): Long {
     val localSeconds = seconds + offset
     return (localSeconds / 86400.0).toLong()
 }
+
+@androidx.compose.runtime.Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    // No-op on iOS
+}
+
+actual fun triggerHapticFeedback(isThreshold: Boolean) {
+    val style = if (isThreshold) platform.UIKit.UIImpactFeedbackStyle.UIImpactFeedbackStyleHeavy else platform.UIKit.UIImpactFeedbackStyle.UIImpactFeedbackStyleMedium
+    val generator = platform.UIKit.UIImpactFeedbackGenerator(style)
+    generator.prepare()
+    generator.impactOccurred()
+}

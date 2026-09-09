@@ -38,7 +38,15 @@ fun MainScreen(viewModel: DiscoverViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val colorScheme = MaterialTheme.colorScheme
 
+    // Khi đang ở tab Album hoặc Settings và không mở màn hình con, back sẽ quay về tab Khám phá
+    plozdev.swipegallery.PlatformBackHandler(
+        enabled = selectedTab != BottomTab.DISCOVER && !uiState.isPendingDeletionsOpen && uiState.fullscreenPhoto == null
+    ) {
+        selectedTab = BottomTab.DISCOVER
+    }
+
     Scaffold(
+
         containerColor = colorScheme.background,
         bottomBar = {
             if (!uiState.isPendingDeletionsOpen) {
