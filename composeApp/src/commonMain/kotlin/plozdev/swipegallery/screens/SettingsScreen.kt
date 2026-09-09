@@ -423,6 +423,8 @@ fun SettingsScreen(
     val settingsState by viewModel.settingsState.collectAsState()
     var showReportDialog by remember { mutableStateOf(false) }
     var showCacheClearedDialog by remember { mutableStateOf(false) }
+    var showClearHistoryConfirmDialog by remember { mutableStateOf(false) }
+    var showHistoryClearedSuccessDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshSettingsStats()
@@ -437,8 +439,7 @@ fun SettingsScreen(
                 plozdev.swipegallery.triggerHapticFeedback(isThreshold = true)
             }
         },
-        onClearHistoryClick = { viewModel.clearSwipeHistory() },
-
+        onClearHistoryClick = { showClearHistoryConfirmDialog = true },
         onClearCacheClick = {
             viewModel.clearCache()
             showCacheClearedDialog = true
@@ -449,6 +450,61 @@ fun SettingsScreen(
         modifier = modifier
     )
 
+    // Popup xác nhận trước khi xóa lịch sử vuốt
+    if (showClearHistoryConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Đặt Lại Lịch Sử Vuốt?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text("Toàn bộ các ảnh đã duyệt (Đã giữ) sẽ được đưa trở lại danh sách chưa duyệt để bạn có thể bắt đầu lại từ đầu.\n\nLưu ý: Ảnh gốc trên điện thoại của bạn KHÔNG bị ảnh hưởng hay xóa bỏ.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearHistoryConfirmDialog = false
+                        viewModel.clearSwipeHistory()
+                        showHistoryClearedSuccessDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Đặt lại")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryConfirmDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
+
+    // Popup thông báo sau khi đã xóa lịch sử vuốt thành công
+    if (showHistoryClearedSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showHistoryClearedSuccessDialog = false },
+            title = {
+                Text(
+                    text = "Thành Công",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text("Đã đặt lại toàn bộ lịch sử vuốt. Bạn có thể quay lại mục Khám phá để bắt đầu duyệt lại từ đầu.")
+            },
+            confirmButton = {
+                TextButton(onClick = { showHistoryClearedSuccessDialog = false }) {
+                    Text("Đóng")
+                }
+            }
+        )
+    }
+
+    // Popup Báo Cáo Dọn Dẹp tích hợp nút Chia sẻ hệ thống
     if (showReportDialog) {
         val cleanedText = formatSettingsFileSize(settingsState.totalCleanedBytes)
         AlertDialog(
@@ -468,6 +524,25 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                Button(
+                    onClick = {
+                        val reportText = buildString {
+                            appendLine("🔥 Báo Cáo Dọn Dẹp - Swipe Gallery")
+                            appendLine("• Chuỗi dọn dẹp: ${settingsState.streakDays} ngày liên tiếp")
+                            appendLine("• Đã giải phóng: $cleanedText")
+                            appendLine("• Đã phân loại: ${settingsState.triagedCount} ảnh")
+                            appendLine("• Tỷ lệ giữ lại: ${settingsState.keptRatio}%")
+                            appendLine("\nQuản lý và dọn dẹp thư viện thông minh cùng Swipe Gallery!")
+                        }
+                        plozdev.swipegallery.shareText(reportText, "Chia sẻ Báo Cáo Dọn Dẹp")
+                        showReportDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Chia sẻ")
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { showReportDialog = false }) {
                     Text("Đóng")
                 }
@@ -475,10 +550,11 @@ fun SettingsScreen(
         )
     }
 
+    // Popup thông báo dọn dẹp bộ nhớ đệm thành công
     if (showCacheClearedDialog) {
         AlertDialog(
             onDismissRequest = { showCacheClearedDialog = false },
-            title = { Text("Bộ Nhớ Đệm", fontWeight = FontWeight.Bold) },
+            title = { Text("Bộ Nhớ Đệm Ảnh", fontWeight = FontWeight.Bold) },
             text = { Text("Đã dọn sạch bộ nhớ cache thumbnail và dữ liệu tạm thời thành công.") },
             confirmButton = {
                 TextButton(onClick = { showCacheClearedDialog = false }) {

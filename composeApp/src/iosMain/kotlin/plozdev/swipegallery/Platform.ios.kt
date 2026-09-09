@@ -41,3 +41,13 @@ actual fun triggerHapticFeedback(isThreshold: Boolean) {
     generator.prepare()
     generator.impactOccurred()
 }
+
+actual fun shareText(text: String, title: String) {
+    val window = platform.UIKit.UIApplication.sharedApplication.keyWindow
+    val rootVc = window?.rootViewController ?: return
+    val activityVc = platform.UIKit.UIActivityViewController(
+        activityItems = listOf(text),
+        applicationActivities = null
+    )
+    rootVc.presentViewController(activityVc, animated = true, completion = null)
+}

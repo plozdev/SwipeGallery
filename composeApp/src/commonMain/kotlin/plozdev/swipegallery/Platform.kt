@@ -18,3 +18,5 @@ expect fun getEpochDay(): Long
 expect fun PlatformBackHandler(enabled: Boolean = true, onBack: () -> Unit)
 
 expect fun triggerHapticFeedback(isThreshold: Boolean = false)
+
+expect fun shareText(text: String, title: String = "Báo Cáo Swipe Gallery")
