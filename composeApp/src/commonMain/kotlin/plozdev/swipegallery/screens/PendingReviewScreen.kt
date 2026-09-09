@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import plozdev.swipegallery.PlatformBackHandler
@@ -121,6 +122,54 @@ fun PendingReviewScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            Surface(
+                color = colorScheme.background,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Quay lại",
+                            tint = colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Text(
+                        text = "Duyệt Xóa Ảnh",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    if (totalCount > 0) {
+                        TextButton(
+                            onClick = onToggleSelectAll,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (allSelected) "Bỏ chọn tất cả" else "Chọn tất cả",
+                                color = colorScheme.primary,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        },
         bottomBar = {
             // Thanh công cụ kép Sticky Bottom Action Bar
             Surface(
@@ -223,56 +272,15 @@ fun PendingReviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .statusBarsPadding()
         ) {
-            // --- 1. Top Navigation Actions ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Quay lại",
-                        tint = colorScheme.onSurface
-                    )
-                }
-
-                // Nút Chọn tất cả / Bỏ chọn tất cả
-                TextButton(
-                    onClick = onToggleSelectAll,
-                    enabled = totalCount > 0
-                ) {
-                    Text(
-                        text = if (allSelected) "Bỏ chọn tất cả" else "Chọn tất cả",
-                        color = colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // --- 2. Tiêu Đề Màn Hình Căn Trái Chuẩn Typography ---
-            Text(
-                text = "Duyệt Xóa Ảnh",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-                color = colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-            )
-
-
             // --- 2. Thẻ Tóm Tắt Thông Minh & An Toàn ---
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                    .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp)),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier
@@ -297,16 +305,22 @@ fun PendingReviewScreen(
                                 color = colorScheme.onSurface
                             )
                         }
-                        Text(
-                            text = "Giải phóng $reclaimSizeText",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selectedCount > 0) colorScheme.error else colorScheme.onSurfaceVariant
-                        )
+                        Surface(
+                            color = colorScheme.primary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Giải phóng $reclaimSizeText",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selectedCount > 0) colorScheme.primary else colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f), thickness = 0.5.dp)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.25f), thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -401,7 +415,7 @@ private fun ReviewThumbnailItem(
             .background(colorScheme.surfaceVariant)
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) colorScheme.error else colorScheme.outlineVariant.copy(alpha = 0.4f),
+                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable { onPhotoClick() }
@@ -420,7 +434,7 @@ private fun ReviewThumbnailItem(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.25f))
+                    .background(Color.Black.copy(alpha = 0.35f))
             )
         }
 
@@ -436,15 +450,15 @@ private fun ReviewThumbnailItem(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(if (isSelected) colorScheme.error else Color.Black.copy(alpha = 0.5f))
-                    .border(1.5.dp, if (isSelected) colorScheme.error else Color.White, CircleShape),
+                    .background(if (isSelected) colorScheme.primary else Color.Black.copy(alpha = 0.5f))
+                    .border(1.5.dp, if (isSelected) colorScheme.primary else Color.White.copy(alpha = 0.8f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (isSelected) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Đã chọn",
-                        tint = colorScheme.onError,
+                        tint = colorScheme.onPrimary,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -467,7 +481,7 @@ private fun ReviewThumbnailItem(
                     text = sizeText,
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 10.sp
                 )
             }
