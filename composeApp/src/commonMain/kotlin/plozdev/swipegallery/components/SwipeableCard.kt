@@ -52,9 +52,12 @@ enum class SwipeDirection {
  * - Handles snap-back physics when release threshold is not met.
  */
 @Stable
-class SwipeableCardState {
-    val offsetX = Animatable(0f)
-    val offsetY = Animatable(0f)
+class SwipeableCardState(
+    initialOffsetX: Float = 0f,
+    initialOffsetY: Float = 0f
+) {
+    val offsetX = Animatable(initialOffsetX)
+    val offsetY = Animatable(initialOffsetY)
 
     var cardWidthPx by mutableStateOf(0f)
     var cardHeightPx by mutableStateOf(0f)
@@ -88,6 +91,23 @@ class SwipeableCardState {
         }
 
         onSwiped()
+    }
+
+    /**
+     * Animate card back to center from off-screen or custom offset.
+     * Perfect for Undo / Revert swipe animations.
+     */
+    suspend fun animateToCenter(
+        animationSpec: AnimationSpec<Float> = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        )
+    ) {
+        isSwipingOut = false
+        coroutineScope {
+            launch { offsetX.animateTo(0f, animationSpec) }
+            launch { offsetY.animateTo(0f, animationSpec) }
+        }
     }
 
     /**
@@ -129,9 +149,14 @@ class SwipeableCardState {
  * Remember a [SwipeableCardState] scoped to an optional key (such as `photo.id`).
  */
 @Composable
-fun rememberSwipeableCardState(key: Any? = null): SwipeableCardState {
-    return remember(key) { SwipeableCardState() }
+fun rememberSwipeableCardState(
+    key: Any? = null,
+    initialOffsetX: Float = 0f,
+    initialOffsetY: Float = 0f
+): SwipeableCardState {
+    return remember(key) { SwipeableCardState(initialOffsetX, initialOffsetY) }
 }
+
 
 /**
  * High-performance Tinder-like swipeable card component following Material Design 3 OLED guidelines.
@@ -207,7 +232,7 @@ fun SwipeableCard(
                                 val isPastThreshold = kotlin.math.abs(state.offsetX.value) >= threshold
                                 if (isPastThreshold && !hasTriggeredHaptic) {
                                     hasTriggeredHaptic = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    plozdev.swipegallery.triggerHapticFeedback(isThreshold = true)
                                 } else if (!isPastThreshold && hasTriggeredHaptic) {
                                     hasTriggeredHaptic = false
                                 }
@@ -225,11 +250,13 @@ fun SwipeableCard(
 
                             when {
                                 state.offsetX.value > threshold -> {
+                                    if (hapticsEnabled) plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
                                     state.swipe(SwipeDirection.RIGHT) {
                                         onSwiped(SwipeDirection.RIGHT)
                                     }
                                 }
                                 state.offsetX.value < -threshold -> {
+                                    if (hapticsEnabled) plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
                                     state.swipe(SwipeDirection.LEFT) {
                                         onSwiped(SwipeDirection.LEFT)
                                     }
@@ -240,6 +267,7 @@ fun SwipeableCard(
                             }
                         }
                     },
+
                     onDragCancel = {
                         hasTriggeredHaptic = false
                         coroutineScope.launch {

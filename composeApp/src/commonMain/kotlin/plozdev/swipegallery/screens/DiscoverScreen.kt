@@ -58,8 +58,10 @@ data class DiscoverUiState(
     val isLoading: Boolean = false,
     val hasPermission: Boolean = true,
     val hasSwipedInSession: Boolean = false,
-    val hapticsEnabled: Boolean = true
+    val hapticsEnabled: Boolean = true,
+    val lastUndoneEvent: plozdev.swipegallery.screens.viewModels.UndoneSwipeEvent? = null
 )
+
 
 /**
  * Màn hình Khám phá (Discover Screen) theo chuẩn OLED Dark Theme và ngôn ngữ tiếng Việt.
@@ -83,12 +85,27 @@ fun DiscoverScreen(
     var showAlbumPickerSheet by remember { mutableStateOf(false) }
 
     val topPhoto = uiState.photos.firstOrNull()
-    val topCardState = rememberSwipeableCardState(key = topPhoto?.id)
-
-    // Khi Undo hoặc chuyển album, đảm bảo thẻ lập tức nằm ngay ngắn ở giữa
-    LaunchedEffect(topPhoto?.id) {
-        topCardState.resetImmediate()
+    val isUndoneTopPhoto = uiState.lastUndoneEvent != null && uiState.lastUndoneEvent.photoId == topPhoto?.id
+    val initialX = if (isUndoneTopPhoto) {
+        if (uiState.lastUndoneEvent?.wasRightSwipe == true) 1400f else -1400f
+    } else {
+        0f
     }
+    val topCardState = rememberSwipeableCardState(
+        key = "${topPhoto?.id}_${uiState.lastUndoneEvent?.eventId}",
+        initialOffsetX = initialX
+    )
+
+    // Khi Undo: animate kéo ảnh từ ngoài màn hình quay trở lại theo đúng hướng đã quẹt
+    // Khi quẹt bình thường hoặc đổi album: reset vị trí tức thì
+    LaunchedEffect(topPhoto?.id, uiState.lastUndoneEvent?.eventId) {
+        if (isUndoneTopPhoto) {
+            topCardState.animateToCenter()
+        } else {
+            topCardState.resetImmediate()
+        }
+    }
+
 
     Column(
         modifier = modifier
@@ -318,7 +335,7 @@ fun DiscoverScreen(
                     if (undoEnabled) {
                         scope.launch {
                             if (uiState.hapticsEnabled) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
                             }
                             // Nhún nút xuống và nảy lại
                             launch {
@@ -363,6 +380,9 @@ fun DiscoverScreen(
                 onClick = {
                     if (actionEnabled) {
                         topPhoto?.let { photo ->
+                            if (uiState.hapticsEnabled) {
+                                plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
+                            }
                             scope.launch {
                                 topCardState.swipe(SwipeDirection.LEFT) {
                                     onSwipeLeft(photo)
@@ -391,6 +411,9 @@ fun DiscoverScreen(
                 onClick = {
                     if (actionEnabled) {
                         topPhoto?.let { photo ->
+                            if (uiState.hapticsEnabled) {
+                                plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
+                            }
                             scope.launch {
                                 topCardState.swipe(SwipeDirection.RIGHT) {
                                     onSwipeRight(photo)
@@ -399,6 +422,7 @@ fun DiscoverScreen(
                         }
                     }
                 },
+
                 containerColor = if (actionEnabled) colorScheme.surfaceVariant else colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 contentColor = if (actionEnabled) colorScheme.primary else colorScheme.primary.copy(alpha = 0.3f),
                 shape = CircleShape,
@@ -840,8 +864,10 @@ fun DiscoverScreen(
         isLoading = uiState.isLoading,
         hasPermission = uiState.hasPermission,
         hasSwipedInSession = viewModel.hasSwipedInSession(),
-        hapticsEnabled = uiState.hapticsEnabled
+        hapticsEnabled = uiState.hapticsEnabled,
+        lastUndoneEvent = uiState.lastUndoneEvent
     )
+
 
     DiscoverScreen(
         uiState = presentationState,
