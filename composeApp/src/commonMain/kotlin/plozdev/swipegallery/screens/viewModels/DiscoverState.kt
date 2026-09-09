@@ -44,5 +44,15 @@ data class DiscoverState(
     val blurryPhotos: List<PhotoItem> = emptyList(),
     val largeVideos: List<PhotoItem> = emptyList(),
     val cleanupSelectedIds: Set<String> = emptySet(),
-    val activeCleanupType: CleanupType? = null
+    val activeCleanupType: CleanupType? = null,
+    
+    // Sự kiện hoàn tác để animate kéo thẻ ảnh quay trở lại
+    val lastUndoneEvent: UndoneSwipeEvent? = null
 )
+
+data class UndoneSwipeEvent(
+    val photoId: String,
+    val wasRightSwipe: Boolean,
+    val eventId: Long
+)
+

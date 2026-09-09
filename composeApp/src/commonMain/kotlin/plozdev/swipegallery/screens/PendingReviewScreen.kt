@@ -14,20 +14,18 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import plozdev.swipegallery.PlatformBackHandler
 import plozdev.swipegallery.components.LocalPhotoView
 import plozdev.swipegallery.domain.models.PhotoItem
 import plozdev.swipegallery.screens.viewModels.DiscoverViewModel
@@ -38,18 +36,20 @@ import plozdev.swipegallery.screens.viewModels.DiscoverViewModel
 data class PendingReviewUiState(
     val pendingPhotos: List<PhotoItem> = emptyList(),
     val selectedPhotoIds: Set<String> = emptySet(),
-    val isDeleting: Boolean = false
+    val isLoading: Boolean = false
 )
 
 /**
  * Pending Review Screen (Presentation Layer).
  *
  * Implements:
- * 1. Top Bar: Back navigation, title "Deletion Review", and "Deselect All" button.
- * 2. Header Summary: Storage reclaim counter with safe staging notice card.
- * 3. Media Grid: 3-column thumbnail grid with top-right deletion badges and bottom file size tags.
- * 4. Sticky Bottom Action Bar: Prominent full-width button styled with [colorScheme.errorContainer].
- * 5. Strictly consumes [MaterialTheme.colorScheme] OLED Dark tokens.
+ * 1. Back Navigation: Tích hợp PlatformBackHandler và phím mũi tên quay lại Album an toàn.
+ * 2. Ngôn ngữ & Tiêu đề: "Duyệt Xóa Ảnh" đồng bộ tiếng Việt 100%.
+ * 3. Thẻ tóm tắt thông minh: Hiển thị số lượng đã chọn, dung lượng giải phóng và giải thích hàng đợi.
+ * 4. Lưới ảnh 3 cột: Bo góc 12dp, checkbox chọn ảnh dễ bấm, tag dung lượng ảnh mờ tinh gọn.
+ * 5. Thanh tác vụ kép (Dual Action Bar):
+ *    - "Khôi phục (X)": Đưa ảnh ra khỏi hàng chờ, đánh dấu giữ lại an toàn.
+ *    - "Xóa (X)": Mở dialog xác nhận trước khi xóa vĩnh viễn khỏi thiết bị.
  */
 @Composable
 fun PendingReviewScreen(
@@ -57,10 +57,14 @@ fun PendingReviewScreen(
     onBackClick: () -> Unit,
     onTogglePhotoSelection: (String) -> Unit,
     onToggleSelectAll: () -> Unit,
+    onRestoreSelected: () -> Unit,
     onDeleteCommit: () -> Unit,
     onPhotoClick: (PhotoItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Intercept system back press/gesture so app doesn't exit
+    PlatformBackHandler(enabled = true, onBack = onBackClick)
+
     val colorScheme = MaterialTheme.colorScheme
 
     val selectedCount = uiState.selectedPhotoIds.size
@@ -72,58 +76,142 @@ fun PendingReviewScreen(
         .sumOf { it.fileSize }
     val reclaimSizeText = formatReviewFileSize(selectedSizeBytes).ifBlank { "0 B" }
 
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    // Dialog xác nhận xóa vĩnh viễn
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Xác nhận xóa vĩnh viễn",
+                    fontWeight = FontWeight.Bold,
+                    color = colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "Bạn có chắc chắn muốn xóa vĩnh viễn $selectedCount ảnh ($reclaimSizeText) khỏi thiết bị? Thao tác này không thể hoàn tác.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDeleteCommit()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colorScheme.error,
+                        contentColor = colorScheme.onError
+                    )
+                ) {
+                    Text("Xóa vĩnh viễn", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Hủy", color = colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = colorScheme.background,
         bottomBar = {
-            // Sticky Bottom Action Bar
+            // Thanh công cụ kép Sticky Bottom Action Bar
             Surface(
                 color = colorScheme.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, colorScheme.outlineVariant),
+                border = androidx.compose.foundation.BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                         .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
-                    Button(
-                        onClick = onDeleteCommit,
-                        enabled = selectedCount > 0 && !uiState.isDeleting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorScheme.errorContainer,
-                            contentColor = colorScheme.onErrorContainer,
-                            disabledContainerColor = colorScheme.surfaceVariant,
-                            disabledContentColor = colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (uiState.isDeleting) {
-                            CircularProgressIndicator(
-                                color = colorScheme.onErrorContainer,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 1. Nút Khôi phục (Đưa ra khỏi hàng chờ và Giữ lại)
+                        FilledTonalButton(
+                            onClick = onRestoreSelected,
+                            enabled = selectedCount > 0 && !uiState.isLoading,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = colorScheme.secondaryContainer,
+                                contentColor = colorScheme.onSecondaryContainer,
+                                disabledContainerColor = colorScheme.surfaceVariant,
+                                disabledContentColor = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Default.Delete,
+                                    imageVector = Icons.Default.Refresh,
                                     contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (selectedCount > 0) {
-                                        "Xóa vĩnh viễn $selectedCount tệp (Giải phóng $reclaimSizeText)"
-                                    } else {
-                                        "Chọn tệp để xóa"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                    text = if (selectedCount > 0) "Khôi phục ($selectedCount)" else "Khôi phục",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
                                 )
+                            }
+                        }
+
+                        // 2. Nút Xóa vĩnh viễn
+                        Button(
+                            onClick = { showDeleteConfirmDialog = true },
+                            enabled = selectedCount > 0 && !uiState.isLoading,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colorScheme.errorContainer,
+                                contentColor = colorScheme.onErrorContainer,
+                                disabledContainerColor = colorScheme.surfaceVariant,
+                                disabledContentColor = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                        ) {
+                            if (uiState.isLoading) {
+                                CircularProgressIndicator(
+                                    color = colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (selectedCount > 0) "Xóa ($selectedCount)" else "Xóa",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
@@ -137,32 +225,23 @@ fun PendingReviewScreen(
                 .padding(paddingValues)
                 .statusBarsPadding()
         ) {
-            // --- 1. Top Bar ---
+            // --- 1. Top Navigation Actions ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Quay lại",
-                            tint = colorScheme.onSurface
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Deletion Review",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onSurface
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Quay lại",
+                        tint = colorScheme.onSurface
                     )
                 }
 
-                // Deselect All / Select All Button
+                // Nút Chọn tất cả / Bỏ chọn tất cả
                 TextButton(
                     onClick = onToggleSelectAll,
                     enabled = totalCount > 0
@@ -176,44 +255,70 @@ fun PendingReviewScreen(
                 }
             }
 
-            // --- 2. Header Summary & Safe Staging Notice ---
-            Column(
+            // --- 2. Tiêu Đề Màn Hình Căn Trái Chuẩn Typography ---
+            Text(
+                text = "Duyệt Xóa Ảnh",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                color = colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+            )
+
+
+            // --- 2. Thẻ Tóm Tắt Thông Minh & An Toàn ---
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
-                // Reclaim Storage Header
-                Text(
-                    text = "Giải phóng $reclaimSizeText từ $selectedCount tệp",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = colorScheme.error
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Safe Staging Notice Card
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(14.dp)),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = colorScheme.surfaceVariant)
+                        .padding(14.dp)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Đã chọn: ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$selectedCount / $totalCount tệp",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = "Giải phóng $reclaimSizeText",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedCount > 0) colorScheme.error else colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f), thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
                             tint = colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Các ảnh này đang ở hàng đợi an toàn. Chỉ khi nhấn xóa, hệ thống mới kích hoạt quyền xóa thật trên máy.",
+                            text = "Ảnh đang ở hàng đợi an toàn. Khôi phục để giữ lại hoặc Xóa vĩnh viễn khỏi máy.",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp
@@ -222,9 +327,9 @@ fun PendingReviewScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // --- 3. Media Grid: 3-column Thumbnail Grid ---
+            // --- 3. Lưới Ảnh 3 Cột ---
             if (uiState.pendingPhotos.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -233,27 +338,31 @@ fun PendingReviewScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "✨", fontSize = 54.sp)
+                        Text(text = "✨", fontSize = 48.sp)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Hàng đợi rỗng",
+                            text = "Hàng đợi trống",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Không có ảnh nào chờ kiểm duyệt xóa.",
+                            text = "Không có ảnh nào trong hàng chờ xóa.",
                             style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        FilledTonalButton(onClick = onBackClick) {
+                            Text("Quay về Album")
+                        }
                     }
                 }
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -274,7 +383,7 @@ fun PendingReviewScreen(
 }
 
 /**
- * 3-Column Thumbnail Item with Deletion Badge and File Size Tag.
+ * Thumbnail Item với viền chọn nổi bật, checkbox góc trên và pill tag dung lượng.
  */
 @Composable
 private fun ReviewThumbnailItem(
@@ -288,12 +397,12 @@ private fun ReviewThumbnailItem(
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(colorScheme.surfaceVariant)
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) colorScheme.error else colorScheme.outlineVariant,
-                shape = RoundedCornerShape(10.dp)
+                color = if (isSelected) colorScheme.error else colorScheme.outlineVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onPhotoClick() }
     ) {
@@ -306,48 +415,59 @@ private fun ReviewThumbnailItem(
             )
         }
 
-        // Selection Toggle Overlay (Top Right Checkbox)
+        // Lớp phủ nhẹ nếu không được chọn
+        if (!isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.25f))
+            )
+        }
+
+        // Checkbox chọn / bỏ chọn ở góc trên bên phải với vùng bấm 40dp
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(if (isSelected) colorScheme.error else colorScheme.background.copy(alpha = 0.6f))
-                .border(1.5.dp, if (isSelected) colorScheme.error else Color.White, CircleShape)
+                .size(40.dp)
                 .clickable { onToggleSelection() },
             contentAlignment = Alignment.Center
         ) {
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = colorScheme.onError,
-                    modifier = Modifier.size(16.dp)
-                )
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(if (isSelected) colorScheme.error else Color.Black.copy(alpha = 0.5f))
+                    .border(1.5.dp, if (isSelected) colorScheme.error else Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Đã chọn",
+                        tint = colorScheme.onError,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
 
-        // Bottom File Size Tag
+        // Bottom File Size Pill Tag
         val sizeText = formatReviewFileSize(photo.fileSize)
         if (sizeText.isNotBlank()) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, colorScheme.background.copy(alpha = 0.85f))
-                        )
-                    )
-                    .padding(vertical = 4.dp),
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = sizeText,
-                    color = colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 10.sp
                 )
             }
@@ -383,7 +503,7 @@ fun PendingReviewScreen(
     val presentationState = PendingReviewUiState(
         pendingPhotos = uiState.pendingDeletions,
         selectedPhotoIds = uiState.selectedDeletions,
-        isDeleting = false
+        isLoading = uiState.isLoading
     )
 
     PendingReviewScreen(
@@ -399,9 +519,11 @@ fun PendingReviewScreen(
             val allSelected = uiState.selectedDeletions.size == uiState.pendingDeletions.size
             viewModel.selectAllDeletions(!allSelected)
         },
+        onRestoreSelected = {
+            viewModel.restoreSelectedPendingDeletions()
+        },
         onDeleteCommit = {
-            viewModel.applyDeletionsAndKeepRemaining()
-            onNavigateBack()
+            viewModel.deleteSelectedPendingDeletions()
         },
         onPhotoClick = { photo ->
             viewModel.openFullscreen(photo)

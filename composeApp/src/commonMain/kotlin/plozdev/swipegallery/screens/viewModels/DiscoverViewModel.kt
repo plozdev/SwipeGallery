@@ -211,8 +211,15 @@ class DiscoverViewModel (
         applyFilters()
     }
 
+    private var undoEventCounter = 0L
+
     fun undoLastSwipe() {
         val last = swipeHistory.removeLastOrNull() ?: return
+        val event = UndoneSwipeEvent(
+            photoId = last.photo.id,
+            wasRightSwipe = last.isRightSwipe,
+            eventId = ++undoEventCounter
+        )
         viewModelScope.launch {
             if (last.isRightSwipe) {
                 repo.unmarkAsKept(last.photo.id)
@@ -223,10 +230,12 @@ class DiscoverViewModel (
                 }
             }
             allUnprocessedPhotos = listOf(last.photo) + allUnprocessedPhotos
+            _uiState.update { it.copy(lastUndoneEvent = event) }
             refreshSettingsStats()
             applyFilters()
         }
     }
+
 
     fun selectAlbum(album: Album?) {
         _uiState.update { it.copy(currentAlbum = album) }
@@ -261,69 +270,145 @@ class DiscoverViewModel (
         onPhotoSwiped(topPhoto, isRightSwipe = false)
     }
 
-    // Thực thi áp dụng xóa các ảnh được chọn và khôi phục (giữ) các ảnh không chọn
-    fun applyDeletionsAndKeepRemaining() {
+    // Xóa vĩnh viễn các ảnh được chọn khỏi thiết bị và hàng chờ
+    fun deleteSelectedPendingDeletions() {
         val selectedIds = uiState.value.selectedDeletions.toList()
+        if (selectedIds.isEmpty()) return
+
         viewModelScope.launch {
-            if (selectedIds.isNotEmpty()) {
-                _uiState.update { it.copy(isLoading = true, errorMsg = null) }
-                try {
-                    val deletedPhotos = uiState.value.pendingDeletions.filter { it.id in selectedIds }
-                    val deletedBytes = deletedPhotos.sumOf { it.fileSize }
-                    val success = repo.deletePhotos(selectedIds)
-                    if (success) {
-                        repo.addCleanedBytes(deletedBytes)
-                        repo.recordStreakActivity()
-                        // Lọc ra các ảnh không được chọn để xóa (người dùng muốn giữ lại)
-                        val keptPhotos = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
-                        repo.clearAllPendingDeletions()
-                        // Ensure kept photos are marked as kept
-                        keptPhotos.forEach { repo.markAsKept(it.id) }
-                        
-                        _uiState.update { currentState ->
-                            currentState.copy(
-                                isLoading = false,
-                                pendingDeletions = emptyList(),
-                                selectedDeletions = emptySet(),
-                                isPendingDeletionsOpen = false
-                            )
-                        }
-                        allUnprocessedPhotos = keptPhotos + allUnprocessedPhotos
-                        refreshSettingsStats()
-                        applyFilters()
-                    } else {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                errorMsg = "Yêu cầu xóa ảnh bị từ chối hoặc thất bại."
-                            )
-                        }
+            _uiState.update { it.copy(isLoading = true, errorMsg = null) }
+            try {
+                val deletedPhotos = uiState.value.pendingDeletions.filter { it.id in selectedIds }
+                val deletedBytes = deletedPhotos.sumOf { it.fileSize }
+                val success = repo.deletePhotos(selectedIds)
+                if (success) {
+                    repo.addCleanedBytes(deletedBytes)
+                    repo.recordStreakActivity()
+                    // Gỡ các ảnh đã xóa khỏi hàng chờ
+                    selectedIds.forEach { repo.removePendingDeletion(it) }
+
+                    val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            pendingDeletions = remainingPending,
+                            selectedDeletions = emptySet(),
+                            isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                        )
                     }
-                } catch (e: Exception) {
+                    refreshSettingsStats()
+                    applyFilters()
+                } else {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMsg = "Lỗi xảy ra trong quá trình xóa: ${e.message}"
+                            errorMsg = "Yêu cầu xóa ảnh bị từ chối hoặc thất bại."
                         )
                     }
                 }
-            } else {
-                // Nếu không chọn ảnh nào để xóa -> coi như giữ lại tất cả ảnh pending
-                val keptPhotos = uiState.value.pendingDeletions
-                repo.clearAllPendingDeletions()
-                
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMsg = "Lỗi xảy ra trong quá trình xóa: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    // Khôi phục các ảnh được chọn ra khỏi hàng chờ xóa (Giữ lại ảnh)
+    fun restoreSelectedPendingDeletions() {
+        val selectedIds = uiState.value.selectedDeletions.toList()
+        if (selectedIds.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMsg = null) }
+            try {
+                selectedIds.forEach { id ->
+                    repo.removePendingDeletion(id)
+                    repo.markAsKept(id)
+                }
+                val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
                 _uiState.update { currentState ->
                     currentState.copy(
+                        isLoading = false,
+                        pendingDeletions = remainingPending,
+                        selectedDeletions = emptySet(),
+                        isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                    )
+                }
+                refreshSettingsStats()
+                applyFilters()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMsg = "Lỗi khi khôi phục ảnh: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    // Khôi phục tất cả ảnh trong hàng chờ xóa
+    fun restoreAllPendingDeletions() {
+        val allPending = uiState.value.pendingDeletions
+        if (allPending.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMsg = null) }
+            try {
+                allPending.forEach {
+                    repo.removePendingDeletion(it.id)
+                    repo.markAsKept(it.id)
+                }
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        isLoading = false,
                         pendingDeletions = emptyList(),
                         selectedDeletions = emptySet(),
                         isPendingDeletionsOpen = false
                     )
                 }
-                allUnprocessedPhotos = keptPhotos + allUnprocessedPhotos
+                refreshSettingsStats()
                 applyFilters()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMsg = "Lỗi khi khôi phục ảnh: ${e.message}"
+                    )
+                }
             }
         }
     }
+
+    // Khôi phục một ảnh đơn lẻ ra khỏi hàng chờ xóa
+    fun restoreSinglePending(photoId: String) {
+        viewModelScope.launch {
+            try {
+                repo.removePendingDeletion(photoId)
+                repo.markAsKept(photoId)
+                val remainingPending = uiState.value.pendingDeletions.filter { it.id != photoId }
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        pendingDeletions = remainingPending,
+                        selectedDeletions = currentState.selectedDeletions - photoId,
+                        isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                    )
+                }
+                refreshSettingsStats()
+                applyFilters()
+            } catch (e: Exception) {}
+        }
+    }
+
+    // Giữ tương thích ngược với code gọi cũ
+    fun applyDeletionsAndKeepRemaining() {
+        deleteSelectedPendingDeletions()
+    }
+
 
     fun commitPendingDeletions() {
         val idsToDelete = uiState.value.pendingDeletions.map { it.id }
