@@ -4,5 +4,9 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể chọn và tải ảnh lên ứng dụng.</string>
+
 </dict>
 </plist>
