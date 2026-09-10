@@ -107,13 +107,18 @@ class DiscoverViewModel (
                     }
                     val photos = repo.getUnprocessedPhotos()
                     val albums = repo.getAlbums()
+                    val remainingByAlbum = photos.groupingBy { it.albumId }.eachCount()
+                    val updatedAlbums = albums.map { album ->
+                        val rem = remainingByAlbum[album.id] ?: 0
+                        album.copy(remainingCount = rem)
+                    }
                     val pendingDeletions = if (isPendingPersisted) repo.getPendingDeletions() else emptyList()
                     allUnprocessedPhotos = photos
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             hasPermission = true,
-                            albums = albums,
+                            albums = updatedAlbums,
                             pendingDeletions = pendingDeletions,
                             isPendingPersisted = isPendingPersisted
                         )
@@ -224,7 +229,7 @@ class DiscoverViewModel (
             if (last.isRightSwipe) {
                 repo.unmarkAsKept(last.photo.id)
             } else {
-                repo.removePendingDeletion(last.photo.id)
+                repo.restorePendingDeletion(last.photo.id)
                 _uiState.update { state ->
                     state.copy(pendingDeletions = state.pendingDeletions.filter { it.id != last.photo.id })
                 }
@@ -317,7 +322,7 @@ class DiscoverViewModel (
         }
     }
 
-    // Khôi phục các ảnh được chọn ra khỏi hàng chờ xóa (Giữ lại ảnh)
+    // Khôi phục các ảnh được chọn ra khỏi hàng chờ xóa (Đưa lại về trạng thái chưa duyệt)
     fun restoreSelectedPendingDeletions() {
         val selectedIds = uiState.value.selectedDeletions.toList()
         if (selectedIds.isEmpty()) return
@@ -326,10 +331,15 @@ class DiscoverViewModel (
             _uiState.update { it.copy(isLoading = true, errorMsg = null) }
             try {
                 selectedIds.forEach { id ->
-                    repo.removePendingDeletion(id)
-                    repo.markAsKept(id)
+                    repo.restorePendingDeletion(id)
                 }
                 val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
+                val refreshedPhotos = repo.getUnprocessedPhotos()
+                allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
+                    refreshedPhotos
+                } else {
+                    refreshedPhotos.filter { it.albumId == uiState.value.currentAlbum?.id }
+                }
                 _uiState.update { currentState ->
                     currentState.copy(
                         isLoading = false,
@@ -360,8 +370,13 @@ class DiscoverViewModel (
             _uiState.update { it.copy(isLoading = true, errorMsg = null) }
             try {
                 allPending.forEach {
-                    repo.removePendingDeletion(it.id)
-                    repo.markAsKept(it.id)
+                    repo.restorePendingDeletion(it.id)
+                }
+                val refreshedPhotos = repo.getUnprocessedPhotos()
+                allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
+                    refreshedPhotos
+                } else {
+                    refreshedPhotos.filter { it.albumId == uiState.value.currentAlbum?.id }
                 }
                 _uiState.update { currentState ->
                     currentState.copy(
@@ -388,9 +403,14 @@ class DiscoverViewModel (
     fun restoreSinglePending(photoId: String) {
         viewModelScope.launch {
             try {
-                repo.removePendingDeletion(photoId)
-                repo.markAsKept(photoId)
+                repo.restorePendingDeletion(photoId)
                 val remainingPending = uiState.value.pendingDeletions.filter { it.id != photoId }
+                val refreshedPhotos = repo.getUnprocessedPhotos()
+                allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
+                    refreshedPhotos
+                } else {
+                    refreshedPhotos.filter { it.albumId == uiState.value.currentAlbum?.id }
+                }
                 _uiState.update { currentState ->
                     currentState.copy(
                         pendingDeletions = remainingPending,
@@ -528,8 +548,14 @@ class DiscoverViewModel (
         // Duplicates: Tạm thời vô hiệu hóa theo yêu cầu để xem xét lại thuật toán nhận diện ảnh giống nhau sau
         val duplicates = emptyList<PhotoItem>()
         
+        val remainingByAlbum = allUnprocessedPhotos.groupingBy { it.albumId }.eachCount()
         _uiState.update { currentState ->
+            val updatedAlbums = currentState.albums.map { album ->
+                val rem = remainingByAlbum[album.id] ?: 0
+                album.copy(remainingCount = rem)
+            }
             currentState.copy(
+                albums = updatedAlbums,
                 photos = photos,
                 blurryPhotos = blurry,
                 largeVideos = videos,

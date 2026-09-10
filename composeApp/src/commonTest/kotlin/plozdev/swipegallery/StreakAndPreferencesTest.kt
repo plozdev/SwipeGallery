@@ -257,4 +257,25 @@ class StreakAndPreferencesTest {
         assertTrue(prefs.getKeptIds().isEmpty())
         assertTrue(prefs.getPendingDeletionIds().isEmpty())
     }
+
+    @Test
+    fun testPendingDeletionRestoreLogic() {
+        val prefs = FakeSwipePreferences()
+        prefs.markAsPendingDeletion("photo_1")
+        prefs.markAsPendingDeletion("photo_2")
+        
+        assertEquals(setOf("photo_1", "photo_2"), prefs.getPendingDeletionIds())
+        assertFalse(prefs.isProcessed("photo_1"))
+        assertFalse(prefs.isProcessed("photo_2"))
+
+        // Khôi phục photo_1 ra khỏi hàng chờ xóa
+        prefs.removePendingDeletion("photo_1")
+        prefs.removeProcessed("photo_1")
+        prefs.removeKept("photo_1")
+
+        // Xác nhận photo_1 không còn trong pending và hoàn toàn unprocessed
+        assertEquals(setOf("photo_2"), prefs.getPendingDeletionIds())
+        assertFalse(prefs.isProcessed("photo_1"))
+        assertFalse(prefs.getKeptIds().contains("photo_1"))
+    }
 }

@@ -12,6 +12,7 @@ interface PhotoRepo {
     suspend fun getPendingDeletions(): List<PhotoItem>
     suspend fun markAsPendingDeletion(photoId: String)
     suspend fun removePendingDeletion(photoId: String)
+    suspend fun restorePendingDeletion(photoId: String)
     suspend fun clearAllPendingDeletions()
     
     suspend fun clearHistory()

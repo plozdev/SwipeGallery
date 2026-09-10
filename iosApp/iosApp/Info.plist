@@ -5,6 +5,8 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 
+	<key>CFBundleDisplayName</key>
+	<string>Swipe Gallery</string>
 	<key>NSPhotoLibraryUsageDescription</key>
     <string>Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể chọn và tải ảnh lên ứng dụng.</string>
 

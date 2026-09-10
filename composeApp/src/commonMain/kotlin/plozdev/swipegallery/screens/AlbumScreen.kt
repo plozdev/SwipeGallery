@@ -354,10 +354,16 @@ private fun AlbumFolderCard(
             modifier = Modifier.padding(horizontal = 4.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
+        val countText = if (album.remainingCount <= 0) {
+            "Đã duyệt hết • ${formatAlbumNumber(album.photoCount)} ảnh"
+        } else {
+            "Còn ${formatAlbumNumber(album.remainingCount)} / ${formatAlbumNumber(album.photoCount)} ảnh"
+        }
         Text(
-            text = "${formatAlbumNumber(album.photoCount)} ảnh",
+            text = countText,
             style = MaterialTheme.typography.bodySmall,
-            color = colorScheme.onSurfaceVariant,
+            color = if (album.remainingCount <= 0) colorScheme.primary else colorScheme.onSurfaceVariant,
+            fontWeight = if (album.remainingCount <= 0) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp)

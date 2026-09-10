@@ -33,6 +33,12 @@ class PhotoRepoImpl(
         preferences.removePendingDeletion(photoId)
     }
 
+    override suspend fun restorePendingDeletion(photoId: String) {
+        preferences.removePendingDeletion(photoId)
+        preferences.removeProcessed(photoId)
+        preferences.removeKept(photoId)
+    }
+
     override suspend fun clearAllPendingDeletions() {
         preferences.clearAllPendingDeletions()
     }

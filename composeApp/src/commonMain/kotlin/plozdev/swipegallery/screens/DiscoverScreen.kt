@@ -87,7 +87,7 @@ fun DiscoverScreen(
     val topPhoto = uiState.photos.firstOrNull()
     val isUndoneTopPhoto = uiState.lastUndoneEvent != null && uiState.lastUndoneEvent.photoId == topPhoto?.id
     val initialX = if (isUndoneTopPhoto) {
-        if (uiState.lastUndoneEvent?.wasRightSwipe == true) 1400f else -1400f
+        if (uiState.lastUndoneEvent.wasRightSwipe) 1400f else -1400f
     } else {
         0f
     }
@@ -379,14 +379,12 @@ fun DiscoverScreen(
             FloatingActionButton(
                 onClick = {
                     if (actionEnabled) {
-                        topPhoto?.let { photo ->
-                            if (uiState.hapticsEnabled) {
-                                plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
-                            }
-                            scope.launch {
-                                topCardState.swipe(SwipeDirection.LEFT) {
-                                    onSwipeLeft(photo)
-                                }
+                        if (uiState.hapticsEnabled) {
+                            plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
+                        }
+                        scope.launch {
+                            topCardState.swipe(SwipeDirection.LEFT) {
+                                onSwipeLeft(topPhoto)
                             }
                         }
                     }
@@ -410,14 +408,12 @@ fun DiscoverScreen(
             FloatingActionButton(
                 onClick = {
                     if (actionEnabled) {
-                        topPhoto?.let { photo ->
-                            if (uiState.hapticsEnabled) {
-                                plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
-                            }
-                            scope.launch {
-                                topCardState.swipe(SwipeDirection.RIGHT) {
-                                    onSwipeRight(photo)
-                                }
+                        if (uiState.hapticsEnabled) {
+                            plozdev.swipegallery.triggerHapticFeedback(isThreshold = false)
+                        }
+                        scope.launch {
+                            topCardState.swipe(SwipeDirection.RIGHT) {
+                                onSwipeRight(topPhoto)
                             }
                         }
                     }

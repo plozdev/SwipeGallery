@@ -37,17 +37,20 @@ actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
 object AndroidHaptics {
     @Volatile
     private var vibrator: android.os.Vibrator? = null
+    @Volatile
+    var appContext: android.content.Context? = null
 
     fun init(context: android.content.Context) {
+        val app = context.applicationContext ?: context
+        appContext = app
         if (vibrator != null) return
         try {
-            val appCtx = context.applicationContext ?: context
             vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                val vm = appCtx.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                val vm = app.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
                 vm?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                appCtx.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                app.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
             }
         } catch (_: Exception) {}
     }
@@ -93,4 +96,20 @@ actual fun triggerHapticFeedback(isThreshold: Boolean) {
     } else {
         AndroidHaptics.vibrateClick()
     }
+}
+
+actual fun shareText(text: String, title: String) {
+    val ctx = AndroidHaptics.appContext ?: return
+    try {
+        val sendIntent = android.content.Intent().apply {
+            action = android.content.Intent.ACTION_SEND
+            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val chooser = android.content.Intent.createChooser(sendIntent, title).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(chooser)
+    } catch (_: Exception) {}
 }
