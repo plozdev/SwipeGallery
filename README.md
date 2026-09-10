@@ -1,6 +1,6 @@
 <div align="center">
 
-  # 🎴 SwipeGallery
+  # 🎴 Swipe Gallery
 
   **A modern, Tinder-style photo triage & gallery management app built with Compose Multiplatform.**
 
@@ -17,6 +17,15 @@
   </a>
 
 </div>
+
+---
+
+## 🎬 Feature Walkthrough
+
+| 🎴 Swipe & Album Triage | 🗑️ Safe Pending Review | ⚙️ Settings & Native Sharing |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/9e9d210e-fa5d-4250-8e3f-109033149340" width="260" alt="Swipe & Album Triage" /> | <img src="https://github.com/user-attachments/assets/832da799-fd20-481c-8ac7-43da3ffa5750" width="260" alt="Safe Pending Review" /> | <img src="https://github.com/user-attachments/assets/57daa47d-bb55-470f-8d11-78a53a7f737f" width="260" alt="Settings & Native Sharing" /> |
+| **Quẹt phân loại & Chọn Album**<br>Quẹt trái/phải, Undo mượt mà và theo dõi tiến độ *"Còn X / Y ảnh"* | **Kiểm duyệt hàng chờ xóa**<br>Xem lại ảnh đã quẹt xóa, khôi phục ảnh nhầm hoặc dọn dẹp an toàn | **Cài đặt & Quyền riêng tư**<br>Xóa lịch sử an toàn, chia sẻ báo cáo dọn dẹp qua native share sheet |
 
 ---
 
