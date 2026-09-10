@@ -20,34 +20,12 @@
 
 ---
 
-## 🎬 Feature Demos
+## 🎬 Feature Walkthrough
 
-<details open>
-<summary><b>1. 🎴 Tinder-style Swiping & Album Triage (Vuốt phân loại & Chọn Album)</b></summary>
-
-> *Quẹt phải để giữ lại, quẹt trái để đưa vào hàng chờ xóa, tính năng Undo mượt mà và theo dõi tiến độ "Còn X / Y ảnh" theo từng album.*
-
-https://github.com/user-attachments/assets/7fb24982-ff1c-43d6-9361-d971a6cba793
-
-</details>
-
-<details open>
-<summary><b>2. 🗑️ Pending Deletion & Safe Review (Kiểm duyệt hàng chờ xóa an toàn)</b></summary>
-
-> *Xem lại danh sách ảnh đã quẹt xóa, khôi phục ảnh nhầm vào album gốc hoặc xác nhận dọn dẹp vĩnh viễn an toàn.*
-
-https://github.com/user-attachments/assets/615a63d1-6322-40c0-b43f-e7e3dc2425a7
-
-</details>
-
-<details open>
-<summary><b>3. ⚙️ Settings, Native Sharing & Privacy (Cài đặt & Chia sẻ Báo cáo)</b></summary>
-
-> *Xác nhận xóa lịch sử an toàn, chia sẻ báo cáo dọn dẹp qua Native Android Share Sheet, xóa bộ nhớ đệm và giao diện OLED Dark Theme.*
-
-https://github.com/user-attachments/assets/d989937c-e19f-4dda-a914-c92cca00e3af
-
-</details>
+| 🎴 Swipe & Album Triage | 🗑️ Safe Pending Review | ⚙️ Settings & Native Sharing |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/9e9d210e-fa5d-4250-8e3f-109033149340" width="260" alt="Swipe & Album Triage" /> | <img src="https://github.com/user-attachments/assets/57daa47d-bb55-470f-8d11-78a53a7f737f" width="260" alt="Safe Pending Review" /> | <img src="https://github.com/user-attachments/assets/832da799-fd20-481c-8ac7-43da3ffa5750" width="260" alt="Settings & Native Sharing" /> |
+| **Quẹt phân loại & Chọn Album**<br>Quẹt trái/phải, Undo mượt mà và theo dõi tiến độ *"Còn X / Y ảnh"* | **Kiểm duyệt hàng chờ xóa**<br>Xem lại ảnh đã quẹt xóa, khôi phục ảnh nhầm hoặc dọn dẹp an toàn | **Cài đặt & Quyền riêng tư**<br>Xóa lịch sử an toàn, chia sẻ báo cáo dọn dẹp qua native share sheet |
 
 ---
 
