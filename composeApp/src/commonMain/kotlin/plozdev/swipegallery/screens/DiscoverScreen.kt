@@ -856,10 +856,10 @@ fun DiscoverScreen(
         allPhotosCoverUri = allPhotosCover,
         totalCount = uiState.photos.size + uiState.pendingDeletions.size,
         remainingCount = uiState.photos.size,
-        canUndo = viewModel.hasSwipedInSession(),
+        canUndo = uiState.canUndo,
         isLoading = uiState.isLoading,
         hasPermission = uiState.hasPermission,
-        hasSwipedInSession = viewModel.hasSwipedInSession(),
+        hasSwipedInSession = uiState.canUndo,
         hapticsEnabled = uiState.hapticsEnabled,
         lastUndoneEvent = uiState.lastUndoneEvent
     )

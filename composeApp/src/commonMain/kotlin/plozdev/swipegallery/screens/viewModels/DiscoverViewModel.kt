@@ -120,7 +120,8 @@ class DiscoverViewModel (
                             hasPermission = true,
                             albums = updatedAlbums,
                             pendingDeletions = pendingDeletions,
-                            isPendingPersisted = isPendingPersisted
+                            isPendingPersisted = isPendingPersisted,
+                            canUndo = swipeHistory.isNotEmpty()
                         )
                     }
                     applyFilters()
@@ -177,8 +178,12 @@ class DiscoverViewModel (
     private val swipeHistory = mutableListOf<SwipedHistoryItem>()
 
     fun onPhotoSwiped(photo: PhotoItem, isRightSwipe: Boolean) {
-        swipeHistory.add(SwipedHistoryItem(photo, isRightSwipe))
+        val safeStaging = uiState.value.safeStagingEnabled
+        if (isRightSwipe || safeStaging) {
+            swipeHistory.add(SwipedHistoryItem(photo, isRightSwipe))
+        }
         allUnprocessedPhotos = allUnprocessedPhotos.filter { it.id != photo.id }
+        _uiState.update { it.copy(canUndo = swipeHistory.isNotEmpty()) }
         if (isRightSwipe) {
             // QUẸT PHẢI (Giữ): Lưu ID ảnh này vào local preferences ngay lập tức để không hiện lại
             viewModelScope.launch {
@@ -195,7 +200,6 @@ class DiscoverViewModel (
             viewModelScope.launch {
                 try {
                     repo.recordStreakActivity()
-                    val safeStaging = repo.isSafeStagingEnabled()
                     if (safeStaging) {
                         repo.markAsPendingDeletion(photo.id)
                         _uiState.update { currentState ->
@@ -219,23 +223,38 @@ class DiscoverViewModel (
     private var undoEventCounter = 0L
 
     fun undoLastSwipe() {
-        val last = swipeHistory.removeLastOrNull() ?: return
+        var last: SwipedHistoryItem? = null
+        while (swipeHistory.isNotEmpty()) {
+            val candidate = swipeHistory.removeLast()
+            // Nếu ảnh bị quẹt trái (chờ xóa), kiểm tra xem nó còn nằm trong hàng chờ an toàn không.
+            // Nếu ảnh đã bị xóa vĩnh viễn khỏi thiết bị (không còn trong pendingDeletions), bỏ qua không thể hoàn tác.
+            if (!candidate.isRightSwipe && uiState.value.safeStagingEnabled && uiState.value.pendingDeletions.none { it.id == candidate.photo.id }) {
+                continue
+            }
+            last = candidate
+            break
+        }
+        val target = last ?: run {
+            _uiState.update { it.copy(canUndo = false) }
+            return
+        }
+
         val event = UndoneSwipeEvent(
-            photoId = last.photo.id,
-            wasRightSwipe = last.isRightSwipe,
+            photoId = target.photo.id,
+            wasRightSwipe = target.isRightSwipe,
             eventId = ++undoEventCounter
         )
         viewModelScope.launch {
-            if (last.isRightSwipe) {
-                repo.unmarkAsKept(last.photo.id)
+            if (target.isRightSwipe) {
+                repo.unmarkAsKept(target.photo.id)
             } else {
-                repo.restorePendingDeletion(last.photo.id)
+                repo.restorePendingDeletion(target.photo.id)
                 _uiState.update { state ->
-                    state.copy(pendingDeletions = state.pendingDeletions.filter { it.id != last.photo.id })
+                    state.copy(pendingDeletions = state.pendingDeletions.filter { it.id != target.photo.id })
                 }
             }
-            allUnprocessedPhotos = listOf(last.photo) + allUnprocessedPhotos
-            _uiState.update { it.copy(lastUndoneEvent = event) }
+            allUnprocessedPhotos = listOf(target.photo) + allUnprocessedPhotos.filter { it.id != target.photo.id }
+            _uiState.update { it.copy(lastUndoneEvent = event, canUndo = swipeHistory.isNotEmpty()) }
             refreshSettingsStats()
             applyFilters()
         }
@@ -292,13 +311,19 @@ class DiscoverViewModel (
                     // Gỡ các ảnh đã xóa khỏi hàng chờ
                     selectedIds.forEach { repo.removePendingDeletion(it) }
 
-                    val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
+                    // Xóa vĩnh viễn khỏi lịch sử vuốt và danh sách chưa xử lý để không thể revert lại
+                    val selectedIdSet = selectedIds.toSet()
+                    swipeHistory.removeAll { it.photo.id in selectedIdSet }
+                    allUnprocessedPhotos = allUnprocessedPhotos.filter { it.id !in selectedIdSet }
+
+                    val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIdSet }
                     _uiState.update { currentState ->
                         currentState.copy(
                             isLoading = false,
                             pendingDeletions = remainingPending,
                             selectedDeletions = emptySet(),
-                            isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                            isPendingDeletionsOpen = remainingPending.isNotEmpty(),
+                            canUndo = swipeHistory.isNotEmpty()
                         )
                     }
                     refreshSettingsStats()
@@ -330,10 +355,14 @@ class DiscoverViewModel (
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMsg = null) }
             try {
+                val selectedIdSet = selectedIds.toSet()
                 selectedIds.forEach { id ->
                     repo.restorePendingDeletion(id)
                 }
-                val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIds }
+                // Gỡ khỏi swipeHistory vì ảnh đã được khôi phục tại giao diện quản lý
+                swipeHistory.removeAll { it.photo.id in selectedIdSet }
+
+                val remainingPending = uiState.value.pendingDeletions.filter { it.id !in selectedIdSet }
                 val refreshedPhotos = repo.getUnprocessedPhotos()
                 allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
                     refreshedPhotos
@@ -345,7 +374,8 @@ class DiscoverViewModel (
                         isLoading = false,
                         pendingDeletions = remainingPending,
                         selectedDeletions = emptySet(),
-                        isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                        isPendingDeletionsOpen = remainingPending.isNotEmpty(),
+                        canUndo = swipeHistory.isNotEmpty()
                     )
                 }
                 refreshSettingsStats()
@@ -369,9 +399,12 @@ class DiscoverViewModel (
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMsg = null) }
             try {
+                val allPendingIds = allPending.map { it.id }.toSet()
                 allPending.forEach {
                     repo.restorePendingDeletion(it.id)
                 }
+                swipeHistory.removeAll { it.photo.id in allPendingIds }
+
                 val refreshedPhotos = repo.getUnprocessedPhotos()
                 allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
                     refreshedPhotos
@@ -383,7 +416,8 @@ class DiscoverViewModel (
                         isLoading = false,
                         pendingDeletions = emptyList(),
                         selectedDeletions = emptySet(),
-                        isPendingDeletionsOpen = false
+                        isPendingDeletionsOpen = false,
+                        canUndo = swipeHistory.isNotEmpty()
                     )
                 }
                 refreshSettingsStats()
@@ -404,6 +438,7 @@ class DiscoverViewModel (
         viewModelScope.launch {
             try {
                 repo.restorePendingDeletion(photoId)
+                swipeHistory.removeAll { it.photo.id == photoId }
                 val remainingPending = uiState.value.pendingDeletions.filter { it.id != photoId }
                 val refreshedPhotos = repo.getUnprocessedPhotos()
                 allUnprocessedPhotos = if (uiState.value.currentAlbum == null) {
@@ -415,7 +450,8 @@ class DiscoverViewModel (
                     currentState.copy(
                         pendingDeletions = remainingPending,
                         selectedDeletions = currentState.selectedDeletions - photoId,
-                        isPendingDeletionsOpen = remainingPending.isNotEmpty()
+                        isPendingDeletionsOpen = remainingPending.isNotEmpty(),
+                        canUndo = swipeHistory.isNotEmpty()
                     )
                 }
                 refreshSettingsStats()
@@ -444,13 +480,20 @@ class DiscoverViewModel (
                     repo.addCleanedBytes(deletedBytes)
                     repo.recordStreakActivity()
                     repo.clearAllPendingDeletions()
+
+                    val deletedIdSet = idsToDelete.toSet()
+                    swipeHistory.removeAll { it.photo.id in deletedIdSet }
+                    allUnprocessedPhotos = allUnprocessedPhotos.filter { it.id !in deletedIdSet }
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            pendingDeletions = emptyList()
+                            pendingDeletions = emptyList(),
+                            canUndo = swipeHistory.isNotEmpty()
                         )
                     }
                     refreshSettingsStats()
+                    applyFilters()
                 } else {
                     _uiState.update {
                         it.copy(
@@ -478,14 +521,17 @@ class DiscoverViewModel (
             } catch (e: Exception) {}
         }
         val restored = uiState.value.pendingDeletions
+        val restoredIds = restored.map { it.id }.toSet()
+        swipeHistory.removeAll { it.photo.id in restoredIds }
         _uiState.update { currentState ->
             currentState.copy(
                 pendingDeletions = emptyList(),
                 selectedDeletions = emptySet(),
-                isPendingDeletionsOpen = false
+                isPendingDeletionsOpen = false,
+                canUndo = swipeHistory.isNotEmpty()
             )
         }
-        allUnprocessedPhotos = restored + allUnprocessedPhotos
+        allUnprocessedPhotos = restored + allUnprocessedPhotos.filter { it.id !in restoredIds }
         applyFilters()
     }
 
@@ -619,12 +665,18 @@ class DiscoverViewModel (
                 if (success) {
                     repo.addCleanedBytes(deletedBytes)
                     repo.recordStreakActivity()
-                    val updatedPhotos = uiState.value.photos.filter { it.id !in selectedIds }
+
+                    val selectedIdSet = selectedIds.toSet()
+                    swipeHistory.removeAll { it.photo.id in selectedIdSet }
+                    allUnprocessedPhotos = allUnprocessedPhotos.filter { it.id !in selectedIdSet }
+
+                    val updatedPhotos = uiState.value.photos.filter { it.id !in selectedIdSet }
                     _uiState.update { currentState ->
                         currentState.copy(
                             isLoading = false,
                             activeCleanupType = null,
-                            cleanupSelectedIds = emptySet()
+                            cleanupSelectedIds = emptySet(),
+                            canUndo = swipeHistory.isNotEmpty()
                         )
                     }
                     refreshSettingsStats()
@@ -679,7 +731,8 @@ class DiscoverViewModel (
     }
 
     fun clearSwipeHistory() {
-        _uiState.update { it.copy(isLoading = true, errorMsg = null) }
+        swipeHistory.clear()
+        _uiState.update { it.copy(isLoading = true, errorMsg = null, canUndo = false) }
         viewModelScope.launch {
             try {
                 repo.clearHistory()
