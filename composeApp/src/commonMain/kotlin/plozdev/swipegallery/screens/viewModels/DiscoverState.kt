@@ -47,7 +47,8 @@ data class DiscoverState(
     val activeCleanupType: CleanupType? = null,
     
     // Sự kiện hoàn tác để animate kéo thẻ ảnh quay trở lại
-    val lastUndoneEvent: UndoneSwipeEvent? = null
+    val lastUndoneEvent: UndoneSwipeEvent? = null,
+    val canUndo: Boolean = false
 )
 
 data class UndoneSwipeEvent(
